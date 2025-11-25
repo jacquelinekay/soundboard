@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Soundboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .sound-btn {
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
+        }
+
+        .sound-btn:active, .sound-btn.playing {
+            transform: scale(0.95);
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+            filter: brightness(1.2);
+        }
+
+        .sound-btn::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s ease-out, height 0.3s ease-out;
+        }
+
+        .sound-btn:active::after {
+            width: 200%;
+            height: 200%;
+            opacity: 0;
+        }
+
+        /* Delete badge animation */
+        .delete-badge {
+            animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+
+        /* Modal Backdrop */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+        }
+
+        .file-drop-area {
+            border: 2px dashed #4b5563;
+            transition: all 0.2s ease;
+        }
+        .file-drop-area.drag-over {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-20 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <i class="fas fa-music text-white text-lg"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight">Chippy's SoundBoard</h1>
+            </div>
+            
+            <div class="flex gap-2">
+                <button id="editToggleBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors flex items-center gap-2">
+                    <i class="fas fa-pen"></i>
+                    <span class="hidden sm:inline">Edit</span>
+                </button>
+                <button id="addSoundBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 shadow-lg shadow-blue-900/20">
+                    <i class="fas fa-plus"></i>
+                    <span class="hidden sm:inline">Add Sound</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-6 lg:p-8">
+        <div class="max-w-7xl mx-auto">
+            
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-gray-500">
+                <i class="fas fa-volume-up text-6xl mb-4 text-gray-700"></i>
+                <h3 class="text-xl font-medium mb-2">Ahhh, silence.</h3>
+                <button onclick="document.getElementById('addSoundBtn').click()" class="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors border border-gray-700">
+                    Upload a Sound Effect
+                </button>
+            </div>
+
+            <!-- Grid -->
+            <div id="soundGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <!-- Buttons injected here by JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Sound Modal -->
+    <div id="modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-2xl w-full max-w-md shadow-2xl border border-gray-700 overflow-hidden transform transition-all scale-100">
+            <div class="p-6">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <i class="fas fa-cloud-upload-alt text-blue-400"></i> Add New Sound
+                </h2>
+                
+                <form id="addSoundForm" class="space-y-4">
+                    <!-- File Input -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-300">Audio File</label>
+                        <div id="dropZone" class="file-drop-area rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-750">
+                            <i class="fas fa-file-audio text-3xl text-gray-500 mb-3"></i>
+                            <p class="text-sm text-gray-400 mb-1"><span class="text-blue-400 font-medium">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs text-gray-600">MP3, WAV, OGG (Max 10MB)</p>
+                            <input type="file" id="soundFile" accept="audio/*" class="hidden" required>
+                            <div id="fileName" class="mt-2 text-sm text-green-400 font-medium hidden truncate w-full px-4"></div>
+                        </div>
+                    </div>
+
+                    <!-- Name Input -->
+                    <div class="space-y-2">
+                        <label for="soundName" class="block text-sm font-medium text-gray-300">Button Name</label>
+                        <input type="text" id="soundName" placeholder="e.g. Vine Boom" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" required maxlength="20">
+                    </div>
+
+                    <!-- Color Picker -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-300">Button Color</label>
+                        <div class="grid grid-cols-5 gap-2" id="colorPicker">
+                            <!-- Generated by JS -->
+                        </div>
+                        <input type="hidden" id="selectedColor" value="bg-blue-600">
+                    </div>
+                </form>
+            </div>
+            
+            <div class="p-4 bg-gray-900/50 border-t border-gray-700 flex justify-end gap-3">
+                <button id="cancelBtn" class="px-4 py-2 text-gray-300 hover:text-white font-medium hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+                <button id="saveBtn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg shadow-lg shadow-blue-900/30 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Save Sound
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl border border-gray-700 flex items-center gap-3 transition-all duration-300 translate-y-24 opacity-0 z-50">
+        <i class="fas fa-check-circle text-green-400"></i>
+        <span id="toastMsg">Action successful</span>
+    </div>
+
+    <script>
+        // --- State Management & IndexedDB ---
+        
+        const DB_NAME = 'SoundboardDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'sounds';
+        
+        let db;
+        let isEditMode = false;
+        let selectedColorClass = 'bg-blue-600';
+
+        const colors = [
+            { class: 'bg-red-600', hover: 'hover:bg-red-500' },
+            { class: 'bg-orange-600', hover: 'hover:bg-orange-500' },
+            { class: 'bg-yellow-600', hover: 'hover:bg-yellow-500' },
+            { class: 'bg-green-600', hover: 'hover:bg-green-500' },
+            { class: 'bg-emerald-600', hover: 'hover:bg-emerald-500' },
+            { class: 'bg-teal-600', hover: 'hover:bg-teal-500' },
+            { class: 'bg-cyan-600', hover: 'hover:bg-cyan-500' },
+            { class: 'bg-sky-600', hover: 'hover:bg-sky-500' },
+            { class: 'bg-blue-600', hover: 'hover:bg-blue-500' },
+            { class: 'bg-indigo-600', hover: 'hover:bg-indigo-500' },
+            { class: 'bg-violet-600', hover: 'hover:bg-violet-500' },
+            { class: 'bg-purple-600', hover: 'hover:bg-purple-500' },
+            { class: 'bg-fuchsia-600', hover: 'hover:bg-fuchsia-500' },
+            { class: 'bg-pink-600', hover: 'hover:bg-pink-500' },
+            { class: 'bg-rose-600', hover: 'hover:bg-rose-500' },
+            { class: 'bg-gray-600', hover: 'hover:bg-gray-500' },
+            { class: 'bg-slate-600', hover: 'hover:bg-slate-500' },
+            { class: 'bg-zinc-600', hover: 'hover:bg-zinc-500' },
+            { class: 'bg-stone-600', hover: 'hover:bg-stone-500' },
+            { class: 'bg-neutral-600', hover: 'hover:bg-neutral-500' }
+        ];
+
+        const defaultSounds = [
+            {
+                name: "Deadliest Catch",
+                path: "sounds/deadliestcatch.mp3",
+                color: "bg-red-600"
+            },
+            {
+                name: "Kudanshita",
+                path: "sounds/kudanshita.mp3",
+                color: "bg-fuchsia-600"
+            },
+            {
+                name: "Elevator Jingle",
+                path: "sounds/elevator.mp3",
+                color: "bg-blue-600"
+            },
+        ];
+
+        // --- Database Helpers ---
+
+        const initDB = () => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = (event) => {
+                    console.error("Database error: " + event.target.errorCode);
+                    reject(event.target.error);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    resolve(db);
+                    loadSounds();
+                };
+            });
+        };
+
+        const saveSoundToDB = (sound) => {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.add(sound);
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject();
+            });
+        };
+
+        const deleteSoundFromDB = (id) => {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.delete(id);
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject();
+            });
+        };
+
+        const getAllSounds = () => {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.getAll();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject();
+            });
+        };
+
+        // --- UI Logic ---
+
+        const grid = document.getElementById('soundGrid');
+        const emptyState = document.getElementById('emptyState');
+        const modal = document.getElementById('modal');
+        const fileInput = document.getElementById('soundFile');
+        const dropZone = document.getElementById('dropZone');
+        const fileNameDisplay = document.getElementById('fileName');
+        const colorPicker = document.getElementById('colorPicker');
+        const toast = document.getElementById('toast');
+
+        function showToast(message) {
+            const msg = document.getElementById('toastMsg');
+            msg.textContent = message;
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3000);
+        }
+
+        async function seedDefaultSounds() {
+            // No fetching needed! Just save the references.
+            for (const sound of defaultSounds) {
+                const newSound = {
+                    id: 'default-' + sound.name.replace(/\s+/g, '-').toLowerCase(),
+                    name: sound.name,
+                    path: sound.path, // We store the path string, not a blob
+                    color: sound.color,
+                    isDefault: true   // Optional: helps if you want to prevent deleting defaults later
+                };
+
+                // Check if it already exists to avoid duplicates on every reload
+                // (Optional logic, but good practice)
+                try {
+                    await saveSoundToDB(newSound);
+                    renderSoundButton(newSound);
+                } catch (e) {
+                    // It might fail if key already exists, which is fine
+                }
+            }
+            emptyState.classList.add('hidden');
+        }
+
+        async function loadSounds() {
+            try {
+                const sounds = await getAllSounds();
+                grid.innerHTML = ''; // Clear grid
+                
+                // CHECK: Is the DB empty?
+                if (sounds.length === 0) {
+                    // Yes: Load defaults
+                    await seedDefaultSounds();
+                } else {
+                    // No: Load normally
+                    emptyState.classList.add('hidden');
+                    sounds.forEach(renderSoundButton);
+                }
+            } catch (err) {
+                console.error('Error loading sounds', err);
+            }
+        }
+
+        function renderSoundButton(sound) {
+            const btn = document.createElement('div');
+            // Find hover color based on bg color class
+            const colorObj = colors.find(c => c.class === sound.color) || colors[0];
+            const hoverClass = colorObj.hover;
+
+            btn.className = `sound-btn relative w-full aspect-square rounded-2xl flex flex-col items-center justify-center cursor-pointer select-none text-center p-2 group ${sound.color} ${hoverClass}`;
+            btn.dataset.id = sound.id;
+            
+            // Icon
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-music text-3xl mb-2 opacity-80 group-hover:scale-110 transition-transform';
+            
+            // Text
+            const text = document.createElement('span');
+            text.className = 'font-bold text-sm sm:text-base leading-tight drop-shadow-md break-words w-full px-1';
+            text.textContent = sound.name;
+
+            // Delete Button (for edit mode)
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-badge absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg hover:bg-red-600 z-10 hidden';
+            deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                handleDelete(sound.id, btn);
+            };
+
+            btn.appendChild(icon);
+            btn.appendChild(text);
+            btn.appendChild(deleteBtn);
+
+            // Interaction
+            btn.addEventListener('mousedown', () => playSound(sound, btn));
+            btn.addEventListener('touchstart', (e) => {
+               // prevent default to stop scrolling if needed, but usually better to let click handle logic
+               // or handle touchstart for faster response on mobile
+               playSound(sound, btn);
+            }, {passive: true});
+
+            grid.appendChild(btn);
+
+            if (isEditMode) {
+                btn.classList.add('animate-pulse');
+                deleteBtn.classList.remove('hidden');
+            }
+        }
+
+        function playSound(sound, btnElement) {
+            if (isEditMode) return;
+
+            // Visual feedback
+            btnElement.classList.add('playing');
+            setTimeout(() => btnElement.classList.remove('playing'), 100);
+
+            let audioSrc;
+
+            if (sound.blob) {
+                // CASE 1: User Uploaded File (stored as Blob)
+                // We reuse the object URL if we already made one to save memory
+                if (!sound.tempUrl) {
+                    sound.tempUrl = URL.createObjectURL(sound.blob);
+                }
+                audioSrc = sound.tempUrl;
+            } else if (sound.path) {
+                // CASE 2: Server File (stored as Path String)
+                audioSrc = sound.path;
+            }
+
+            if (audioSrc) {
+                const audio = new Audio(audioSrc);
+                audio.currentTime = 0;
+                audio.play().catch(e => console.error("Playback failed:", e));
+            }
+        }
+
+
+        async function handleDelete(id, btnElement) {
+            if(!confirm('Delete this sound?')) return;
+            
+            try {
+                await deleteSoundFromDB(id);
+                btnElement.remove();
+                
+                // check if empty
+                const remaining = document.querySelectorAll('.sound-btn');
+                if(remaining.length === 0) emptyState.classList.remove('hidden');
+                
+                showToast('Sound deleted');
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Edit Mode Toggle
+        document.getElementById('editToggleBtn').addEventListener('click', function() {
+            isEditMode = !isEditMode;
+            this.classList.toggle('bg-gray-600');
+            this.classList.toggle('bg-blue-600');
+            this.classList.toggle('text-white');
+            
+            const deleteBtns = document.querySelectorAll('.delete-badge');
+            const soundBtns = document.querySelectorAll('.sound-btn');
+
+            if (isEditMode) {
+                this.innerHTML = '<i class="fas fa-check"></i> <span class="hidden sm:inline">Done</span>';
+                deleteBtns.forEach(b => b.classList.remove('hidden'));
+                soundBtns.forEach(b => {
+                    b.classList.add('animate-pulse');
+                    b.style.pointerEvents = 'none'; // Disable play in edit mode
+                    b.querySelector('.delete-badge').style.pointerEvents = 'auto'; // Re-enable delete button
+                });
+            } else {
+                this.innerHTML = '<i class="fas fa-pen"></i> <span class="hidden sm:inline">Edit</span>';
+                deleteBtns.forEach(b => b.classList.add('hidden'));
+                soundBtns.forEach(b => {
+                    b.classList.remove('animate-pulse');
+                    b.style.pointerEvents = 'auto';
+                });
+            }
+        });
+
+        // Add Sound Modal
+        document.getElementById('addSoundBtn').addEventListener('click', () => {
+            modal.classList.remove('hidden');
+            fileInput.value = '';
+            document.getElementById('soundName').value = '';
+            fileNameDisplay.classList.add('hidden');
+            renderColorPicker();
+        });
+
+        document.getElementById('cancelBtn').addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        // Close modal on outside click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.add('hidden');
+        });
+
+        // File Input Handling
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // Drag and Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            }
+        });
+
+        function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (file) {
+                // Check size (10MB limit)
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('File too large. Please select a file under 10MB.');
+                    fileInput.value = '';
+                    return;
+                }
+
+                fileNameDisplay.textContent = file.name;
+                fileNameDisplay.classList.remove('hidden');
+                
+                // Auto-fill name if empty
+                const nameInput = document.getElementById('soundName');
+                if (!nameInput.value) {
+                    const nameWithoutExt = file.name.split('.').slice(0, -1).join('.');
+                    nameInput.value = nameWithoutExt.substring(0, 20);
+                }
+            }
+        }
+
+        // Color Picker Logic
+        function renderColorPicker() {
+            colorPicker.innerHTML = '';
+            colors.forEach(c => {
+                const swatch = document.createElement('div');
+                swatch.className = `${c.class} w-8 h-8 rounded-full cursor-pointer hover:scale-110 transition-transform ring-2 ring-offset-2 ring-offset-gray-800 ring-transparent`;
+                if (c.class === selectedColorClass) {
+                    swatch.classList.add('ring-white');
+                }
+                
+                swatch.onclick = () => {
+                    selectedColorClass = c.class;
+                    // Reset rings
+                    Array.from(colorPicker.children).forEach(child => child.classList.remove('ring-white'));
+                    // Add ring to selected
+                    swatch.classList.add('ring-white');
+                };
+                colorPicker.appendChild(swatch);
+            });
+        }
+
+        // Save Logic
+        document.getElementById('saveBtn').addEventListener('click', async function() {
+            const file = fileInput.files[0];
+            const name = document.getElementById('soundName').value.trim();
+
+            if (!file || !name) {
+                alert('Please provide both a file and a name.');
+                return;
+            }
+
+            this.disabled = true;
+            this.textContent = 'Saving...';
+
+            const newSound = {
+                id: Date.now().toString(),
+                name: name,
+                blob: file,
+                color: selectedColorClass
+            };
+
+            try {
+                await saveSoundToDB(newSound);
+                renderSoundButton(newSound);
+                modal.classList.add('hidden');
+                emptyState.classList.add('hidden');
+                showToast('Sound added successfully!');
+            } catch (err) {
+                console.error(err);
+                alert('Failed to save sound.');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Save Sound';
+            }
+        });
+
+        // Init
+        initDB();
+
+    </script>
+</body>
+</html>
