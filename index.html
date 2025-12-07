@@ -235,6 +235,12 @@
                 path: "sounds/elevator.mp3",
                 color: "bg-blue-600"
             },
+            {
+                name: "Kwenchana",
+                path: "sounds/kwenchana.mp3",
+                color: "bg-green-600"
+            },
+
         ];
 
         // --- Database Helpers ---
@@ -432,7 +438,6 @@
                 audio.play().catch(e => console.error("Playback failed:", e));
             }
         }
-
 
         async function handleDelete(id, btnElement) {
             if(!confirm('Delete this sound?')) return;
